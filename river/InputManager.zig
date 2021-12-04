@@ -94,6 +94,7 @@ pointer_constraints: *wlr.PointerConstraintsV1,
 relative_pointer_manager: *wlr.RelativePointerManagerV1,
 virtual_pointer_manager: *wlr.VirtualPointerManagerV1,
 virtual_keyboard_manager: *wlr.VirtualKeyboardManagerV1,
+tablet_manager: *wlr.TabletManagerV2,
 
 input_configs: std.ArrayList(InputConfig),
 input_devices: std.TailQueue(InputDevice) = .{},
@@ -124,6 +125,7 @@ pub fn init(self: *Self) !void {
         .relative_pointer_manager = try wlr.RelativePointerManagerV1.create(server.wl_server),
         .virtual_pointer_manager = try wlr.VirtualPointerManagerV1.create(server.wl_server),
         .virtual_keyboard_manager = try wlr.VirtualKeyboardManagerV1.create(server.wl_server),
+        .tablet_manager = try wlr.TabletManagerV2.create(server.wl_server),
         .input_configs = std.ArrayList(InputConfig).init(util.gpa),
     };
 

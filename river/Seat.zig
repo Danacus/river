@@ -59,6 +59,8 @@ has_touch: bool = false,
 /// Mulitple keyboards are handled separately
 keyboards: std.TailQueue(Keyboard) = .{},
 
+tablets: std.TailQueue(wlr.TabletV2) = .{},
+
 /// ID of the current keymap mode
 mode_id: usize = 0,
 
@@ -405,6 +407,7 @@ pub fn addDevice(self: *Self, device: *wlr.InputDevice) void {
         .keyboard => self.addKeyboard(device) catch return,
         .pointer => self.addPointer(device),
         .touch => self.addTouch(device),
+        .tablet_tool => self.addTabletTool(device),
         else => return,
     }
 
@@ -444,6 +447,13 @@ fn addPointer(self: Self, device: *wlr.InputDevice) void {
 fn addTouch(self: *Self, device: *wlr.InputDevice) void {
     self.cursor.wlr_cursor.attachInputDevice(device);
     self.has_touch = true;
+}
+
+fn addTabletTool(self: *Self, device: *wlr.InputDevice) void {
+    const node = try util.gpa.create(std.TailQueue(wlr.TabletV2).Node);
+    node.data = wlr.TabletV2.create(server.input_manager.tablet_manager);
+    self.tablets.append(node);
+    self.cursor.wlr_cursor.attachInputDevice(device);
 }
 
 fn handleRequestSetSelection(

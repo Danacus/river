@@ -111,6 +111,11 @@ touch_down: wl.Listener(*wlr.Touch.event.Down) =
 touch_motion: wl.Listener(*wlr.Touch.event.Motion) =
     wl.Listener(*wlr.Touch.event.Motion).init(handleTouchMotion),
 
+tablet_tool_axis: wl.Listener(*wlr.Tablet.event.Axis) =
+    wl.Listener(*wlr.Tablet.event.Axis).init(handleTabletToolAxis),
+tablet_tool_proximity: wl.Listener(*wlr.Tablet.event.Proximity) =
+    wl.Listener(*wlr.Tablet.event.Proximity).init(handleTabletToolProximity),
+
 pub fn init(self: *Self, seat: *Seat) !void {
     const wlr_cursor = try wlr.Cursor.create();
     errdefer wlr_cursor.destroy();
@@ -152,6 +157,9 @@ pub fn init(self: *Self, seat: *Seat) !void {
     wlr_cursor.events.touch_up.add(&self.touch_up);
     wlr_cursor.events.touch_down.add(&self.touch_down);
     wlr_cursor.events.touch_motion.add(&self.touch_motion);
+
+    wlr_cursor.events.tablet_tool_axis.add(&self.tablet_tool_axis);
+    wlr_cursor.events.tablet_tool_proximity.add(&self.tablet_tool_proximity);
 }
 
 pub fn deinit(self: *Self) void {
@@ -500,6 +508,45 @@ fn handleTouchDown(
     self.hide();
 }
 
+fn handleTabletToolAxis(
+    listener: *wl.Listener(*wlr.Tablet.event.Axis),
+    event: *wlr.Tablet.event.Axis,
+) void {
+    const self = @fieldParentPtr(Self, "tablet_tool_axis", listener);
+
+    self.seat.handleActivity();
+
+    const change_x = (event.updated_axes & @enumToInt(wlr.TabletTool.Axis.x)) != 0;
+    const change_y = (event.updated_axes & @enumToInt(wlr.TabletTool.Axis.y)) != 0;
+
+    log.debug("tablet tool axis ({}, {}): {} {}", .{ change_x, change_y, event.x, event.y });
+
+    self.wlr_cursor.warpAbsolute(
+        event.device,
+        if (change_x) event.x else std.math.nan(f64),
+        if (change_y) event.y else std.math.nan(f64),
+    );
+}
+
+fn handleTabletToolProximity(
+    listener: *wl.Listener(*wlr.Tablet.event.Proximity),
+    event: *wlr.Tablet.event.Proximity,
+) void {
+    const self = @fieldParentPtr(Self, "tablet_tool_proximity", listener);
+
+    log.debug("tablet tool proximity: {}", .{event});
+
+    self.seat.handleActivity();
+
+    var lx: f64 = undefined;
+    var ly: f64 = undefined;
+    self.wlr_cursor.absoluteToLayoutCoords(event.device, event.x, event.y, &lx, &ly);
+
+    const dx = lx - self.wlr_cursor.x;
+    const dy = ly - self.wlr_cursor.y;
+    self.processMotion(event.device, event.time_msec, dx, dy, dx, dy);
+}
+
 const SurfaceAtResult = struct {
     surface: *wlr.Surface,
     sx: f64,
@@ -794,6 +841,14 @@ fn leaveMode(self: *Self, event: *wlr.Pointer.event.Button) void {
 
     self.mode = .passthrough;
     self.passthrough(event.time_msec);
+}
+
+fn processTabletToolMotion(self: *Self, change_x: bool, change_y: bool, x: f64, y: f64) void {
+    self.wlr_cursor.warpAbsolute(
+        event.device,
+        if (change_x) event.x else std.math.nan(f64),
+        if (change_y) event.y else std.math.nan(f64),
+    );
 }
 
 fn processMotion(self: *Self, device: *wlr.InputDevice, time: u32, delta_x: f64, delta_y: f64, unaccel_dx: f64, unaccel_dy: f64) void {
